@@ -9,6 +9,9 @@ from config import config
 import random
 
 if __name__ == '__main__':
+	# Initialization stuff
+	tf.compat.v1.disable_eager_execution()
+	
 	# make env
 	env = gym.make(config.env_name)
 	

@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 class config():
-	env_name = "Reacher-v1"
+	env_name = "Reacher-v2"
 	record = True
 	r_seed = 15
 	seed_str = 'r_seed=' + str(r_seed)
