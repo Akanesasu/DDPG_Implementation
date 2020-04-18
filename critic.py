@@ -19,9 +19,9 @@ class Critic(object):
 		self.config = config
 		self.s = state
 		self.sp = next_state
-		self.a = action
-		self.mu = action_by_mu  # computed by actor
-		self.mup = action_next  # computed by actor
+		self.a = action			# action taken by explorer
+		self.mu = action_by_mu  # action computed by actor
+		self.mup = action_next  # action for next state computed by actor
 		self.r = reward
 		self.done_mask = done_mask
 
@@ -49,8 +49,13 @@ class Critic(object):
 			out = tf.keras.layers.concatenate([out, action], axis=1)
 			out = tf.keras.layers.Dense(300, activation=tf.nn.relu,
 										kernel_regularizer=regularizers.l2(self.weight_decay))(out)
+			# initialize weights and biases of last layer
+			init_wb = tf.random_uniform_initializer(-3e-3, 3e-3)
 			out = tf.keras.layers.Dense(1,
-										kernel_regularizer=regularizers.l2(self.weight_decay))(out)
+										kernel_regularizer=regularizers.l2(self.weight_decay),
+										kernel_initializer=init_wb,
+										bias_initializer=init_wb
+										)(out)
 		return out
 
 	def add_loss_op(self, q, target_q, r, done_mask):
