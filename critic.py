@@ -1,114 +1,100 @@
-import tensorflow as tf
-import tensorflow.compat.v1 as tfv1
-from tensorflow.keras import regularizers
-import numpy as np
+import gym
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+from config import config
+
+
+class Q_Network(nn.Module):
+	def __init__(self, name, state_dim, action_dim):
+		super(Q_Network, self).__init__()
+		self.name = name
+		# Architecture same as DDPG paper (low dimensional feature version)
+		self.fc1 = nn.Linear(state_dim, 400)
+		self.fc2 = nn.Linear(400 + action_dim, 300)
+		self.fc3 = nn.Linear(300, 1)
+		# initialize weights and biases of last layer as in DDPG paper
+		nn.init.uniform_(self.fc3.weight, -3e-3, 3e-3)
+		nn.init.uniform_(self.fc3.bias, -3e-3, 3e-3)
+	
+	def forward(self, s, a):
+		"""
+		Args:
+			s (torch tensor):
+				shape = (batch_size, state_dim)
+			a (torch tensor):
+				shape = (batch_size, action_dim)
+		"""
+		x = F.relu(self.fc1(s))
+		x = torch.cat((x, a), 1)
+		x = F.relu(self.fc2(x))
+		x = self.fc3(x)
+		# x is a scalar denoting Q(s,a)
+		return x
 
 
 class Critic(object):
-	def __init__(self, config, state, next_state,
-				 action, action_by_mu, action_next, reward, done_mask):
+	"""
+	Class for critic in DDPG
+	"""
+	
+	def __init__(self, state_dim, action_dim, device=None):
+		self.state_dim = state_dim
+		self.action_dim = action_dim
+		self._build_critic()
+		# assign device
+		self.device = device
+		if self.device is None:
+			self.device = torch.device("cuda" if torch.cuda.is_available()
+									   else "cpu")
+	
+	def _build_critic(self):
+		self.q = Q_Network("q", self.state_dim, self.action_dim)
+		self.target_q = Q_Network("target_q", self.state_dim, self.action_dim)
+		# let the value of the target net equal to eval net
+		self._hard_target_update(self.q, self.target_q)
+		# add optimizer
+		self.optimizer = optim.Adam(self.q.parameters(), lr=config.critic_lr,
+									weight_decay=config.weight_decay)
+	
+	def _soft_target_update(self, eval_net=None, target_net=None):
+		if eval_net is None:
+			eval_net = self.q
+		if target_net is None:
+			target_net = self.target_q
+		eval_par = eval_net.state_dict()
+		tar_par = target_net.state_dict()
+		upd_par = {}  # updated parameters
+		for par in eval_par:
+			# par here is a string like "fc1.weight"
+			upd_par[par] = tar_par[par] + \
+						   config.tau * (eval_par[par] - tar_par[par])
+		target_net.load_state_dict(upd_par)
+	
+	def _hard_target_update(self, eval_net, target_net):
+		target_net.load_state_dict(eval_net.state_dict())
+	
+	def train_on_batch(self, s, a, sp, mup, r, done):
 		"""
-		Initialize Critic.
+		Train by bootstrapping
+		Loss: (reward + gamma * Q(s', mu'(s')) - Q(s, a)) ^ 2
 		Args:
-						config: global config
-						state:  state placeholder
-						next_state: next state placeholder
-						action: (tf tensor) action given by actor
-						next_action: (tf tensor) action of next state given by actor
+			s:	shape = (batch_size, state_dim)
+			a:	shape = (batch_size, action_dim)
+			sp: s'
+				shape = (batch_size, state_dim)
+			mup: mu'(s') which is computed by actor
+				shape = (batch_size, action_dim)
 		"""
-		self.config = config
-		self.s = state
-		self.sp = next_state
-		self.a = action			# action taken by explorer
-		self.mu = action_by_mu  # action computed by actor
-		self.mup = action_next  # action for next state computed by actor
-		self.r = reward
-		self.done_mask = done_mask
-
-		self.lr = config.critic_learning_rate
-		self.weight_decay = config.weight_decay
-		self.tau = config.tau
-
-	def set_session(self, session):
-		# the same session as actor
-		self.sess = session
-
-	def get_q_value_op(self, state, action, scope, reuse=False):
-		"""
-		Returns Q value for (state, action) pairs
-		Args:
-						state, action (tensor) : the pair to be evaluated
-						scope (string): indicate whether is target network or not
-						reuse (bool): reuse of variables in the scope
-		Returns:
-						A scalar tf tensor denoting Q(state, action)
-		"""
-		with tfv1.variable_scope(scope, reuse=reuse):
-			out = tf.keras.layers.Dense(400, activation=tf.nn.relu,
-										kernel_regularizer=regularizers.l2(self.weight_decay))(state)
-			out = tf.keras.layers.concatenate([out, action], axis=1)
-			out = tf.keras.layers.Dense(300, activation=tf.nn.relu,
-										kernel_regularizer=regularizers.l2(self.weight_decay))(out)
-			# initialize weights and biases of last layer
-			init_wb = tf.random_uniform_initializer(-3e-3, 3e-3)
-			out = tf.keras.layers.Dense(1,
-										kernel_regularizer=regularizers.l2(self.weight_decay),
-										kernel_initializer=init_wb,
-										bias_initializer=init_wb
-										)(out)
-		return out
-
-	def add_loss_op(self, q, target_q, r, done_mask):
-		"""
-		Add mean squared error loss for a batch.
-		Args:
-				q, target_q: Q values computed by current network and target network.
-				r, done_mask (Tensor): denote reward and whether done respectively.
-		"""
-		not_done = 1 - tf.cast(done_mask, tf.float32)
-		Target = r + self.config.gamma * not_done * target_q
-		self.loss = tf.losses.mean_squared_error(Target, q)
-
-	def add_optimizer_op(self, scope):
-		"""
-		Add Adam optimizer to minimize MSE loss.
-		Args:
-				scope (string): The network to train,
-						typically "q" rather "target_q".
-		"""
-		optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr)
-		train_vars = tfv1.get_collection(tfv1.GraphKeys.TRAINABLE_VARIABLES,
-										 scope=scope)
-		self.train_op = optimizer.minimize(self.loss, train_vars)
-
-	def add_soft_target_update_op(self, q_scope, target_q_scope):
-		"""
-		Move target weights slowly toward current weights.
-		"""
-		q_vars = tfv1.get_collection(tfv1.GraphKeys.TRAINABLE_VARIABLES,
-									 scope=q_scope)
-		tar_vars = tfv1.get_collection(tfv1.GraphKeys.TRAINABLE_VARIABLES,
-									   scope=target_q_scope)
-
-		upd_vars = [tar_vars[i] + self.tau * (q_vars[i] - tar_vars[i])
-					for i in range(len(q_vars))]
-		self.update_target_op = tfv1.group(*[tfv1.assign(tar_var, upd_var)
-											 for tar_var, upd_var in zip(tar_vars, upd_vars)])
-
-	def build_critic(self):
-		"""
-		Build the critic model by adding all necessary variables.
-		"""
-		# compute Q(s, a) for bootstrapping of critic
-		self.q = self.get_q_value_op(self.s, self.a, "q")
-		# compute Q(s', mu(s')) also for bootstrapping of critic
-		self.target_q = self.get_q_value_op(self.sp, self.mup, "target_q")
-		# compute Q(s, mu(s)) for computing policy gradient
-		self.qm = self.get_q_value_op(self.s, self.mu, "q", reuse=True)
-		# add soft target update op (critic)
-		self.add_soft_target_update_op("q", "target_q")
-		# add loss
-		self.add_loss_op(self.q, self.target_q, self.r, self.done_mask)
-		# add training op
-		self.add_optimizer_op("q")
-		
+		assert s.shape[0] == config.batch_size
+		not_done = 1 - done
+		target_q_values = r + config.gamma * not_done * \
+						  self.target_q(sp, mup).detach()
+		q_values = self.q(s, a)
+		loss = F.mse_loss(q_values, target_q_values)
+		self.optimizer.zero_grad()
+		loss.backward()
+		self.optimizer.step()
+		# move target network toward eval network
+		self._soft_target_update()
