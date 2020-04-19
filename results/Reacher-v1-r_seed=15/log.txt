@@ -343,3 +343,9 @@ If using Keras pass *_constraint arguments to layers.
 2020-04-19 14:42:31,287:INFO: Making new env: Reacher-v1
 2020-04-19 14:42:31,506:INFO: Starting new video recorder writing to /home/fan/Studying/DDPG_Implementation/results/Reacher-v1-r_seed=15/monitor/openaigym.video.7.8093.video000000.mp4
 2020-04-19 14:42:35,412:INFO: Finished writing results. You can upload them to the scoreboard via gym.upload('/home/fan/Studying/DDPG_Implementation/results/Reacher-v1-r_seed=15/monitor')
+2020-04-19 14:44:23,942:INFO: Evaluating...
+2020-04-19 14:44:25,174:INFO: Average reward: -14.33 +/- 0.41
+2020-04-19 14:44:25,174:INFO: Recording...
+2020-04-19 14:44:25,174:INFO: Making new env: Reacher-v1
+2020-04-19 14:44:25,214:INFO: Starting new video recorder writing to /home/fan/Studying/DDPG_Implementation/results/Reacher-v1-r_seed=15/monitor/openaigym.video.8.8093.video000000.mp4
+2020-04-19 14:44:31,907:INFO: Finished writing results. You can upload them to the scoreboard via gym.upload('/home/fan/Studying/DDPG_Implementation/results/Reacher-v1-r_seed=15/monitor')
