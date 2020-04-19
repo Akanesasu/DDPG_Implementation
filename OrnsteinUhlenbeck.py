@@ -1,6 +1,7 @@
 """
 OU Process from https://blog.csdn.net/u013745804/article/details/78461253
 """
+import numpy as np
 
 class OrnsteinUhlenbeckActionNoise:
 	def __init__(self, mu, sigma=0.2, theta=0.15, dt=1e-2, x0=None):

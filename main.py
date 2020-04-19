@@ -13,7 +13,7 @@ if __name__ == '__main__':
 	env = gym.make(config.env_name)
 	
 	# train model
-	model = DDPG(env, config)
+	model = DDPG(env)
 	model.run()
 	
 	

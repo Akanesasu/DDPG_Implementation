@@ -1,3 +1,4 @@
+import torch
 
 class config():
 	env_name = "Reacher-v1"
@@ -15,15 +16,15 @@ class config():
 	# model and training config
 	num_episodes_test = 50
 	max_ep_len = 1000		# maximum episode length
-	eval_freq = 5000
-	saving_freq = 5000
-	record_freq = 5000
+	eval_freq = 50000
+	saving_freq = 50000
+	record_freq = 50000
 	log_freq = 50
 	
 	
 	# hyper parameters
-	nsteps_train = 100000
-	learning_start = 5000
+	nsteps_train = 500000
+	learning_start = 50000
 	learning_freq = 5			# learn after performing every 5 steps
 	buffer_size = 1000000		# replay buffer capacity (of transitions)
 	weight_decay = 0.01			# for l2 regularizer
@@ -32,5 +33,11 @@ class config():
 	critic_lr = 1e-3
 	gamma = 0.99  				# the discount factor
 	tau = 0.001  				# soft target update rate
+	
+	# device
+	device = None
+	if device is None:
+		device = torch.device("cuda" if torch.cuda.is_available()
+								   else "cpu")
 
 	

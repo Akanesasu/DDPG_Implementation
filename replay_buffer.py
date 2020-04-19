@@ -34,6 +34,9 @@ class ReplayBuffer(object):
 		"""
 		Store a single transition in the buffer at the next available index,
 		overwriting old transitions if necessary.
+		NOTE: Here state, action, ... are all torch tensors
+			of shape = (1, state_dim), ...
+			i.e., with batch dim
 		"""
 		if len(self.memory) < self.capacity:
 			self.memory.append(None)

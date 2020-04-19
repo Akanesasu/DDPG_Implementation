@@ -27,7 +27,7 @@ class Policy_Network(nn.Module):
 		"""
 		x = F.relu(self.fc1(state))
 		x = F.relu(self.fc2(x))
-		x = F.tanh(self.fc3(x))
+		x = torch.tanh(self.fc3(x))
 		return x
 
 
@@ -88,10 +88,19 @@ class Actor(object):
 			value of loss
 		"""
 		a = self.mu(s)
-		loss = -q_net(s, a)
+		loss = torch.mean(-q_net(s, a))
 		self.optimizer.zero_grad()
 		loss.backward()
 		self.optimizer.step()
 		# move target network toward eval network
 		self._soft_target_update()
 		return loss.item() # -Q(s, mu(s))
+	
+	def choose_action(self, s):
+		"""
+		Just used to choose, not used to train
+		Args:
+			s (torch tensor):
+				shape = (state_dim)
+		"""
+		return self.mu(s).detach()
