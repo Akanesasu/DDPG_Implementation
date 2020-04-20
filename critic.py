@@ -10,10 +10,9 @@ class Q_Network(nn.Module):
 	def __init__(self, name, state_dim, action_dim):
 		super(Q_Network, self).__init__()
 		self.name = name
-		# Architecture same as DDPG paper (low dimensional feature version)
-		self.fc1 = nn.Linear(state_dim, 400)
-		self.fc2 = nn.Linear(400 + action_dim, 300)
-		self.fc3 = nn.Linear(300, 1)
+		self.fc1 = nn.Linear(state_dim, 128)
+		self.fc2 = nn.Linear(128 + action_dim, 64)
+		self.fc3 = nn.Linear(64, 1)
 		# initialize weights and biases of last layer as in DDPG paper
 		nn.init.uniform_(self.fc3.weight, -3e-3, 3e-3)
 		nn.init.uniform_(self.fc3.bias, -3e-3, 3e-3)
@@ -58,7 +57,7 @@ class Critic(object):
 		self.optimizer = optim.Adam(self.q.parameters(), lr=config.critic_lr,
 									weight_decay=config.weight_decay)
 	
-	def _soft_target_update(self, eval_net=None, target_net=None):
+	def soft_target_update(self, eval_net=None, target_net=None):
 		if eval_net is None:
 			eval_net = self.q
 		if target_net is None:
@@ -96,5 +95,4 @@ class Critic(object):
 		self.optimizer.zero_grad()
 		loss.backward()
 		self.optimizer.step()
-		# move target network toward eval network
-		self._soft_target_update()
+		return loss

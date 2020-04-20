@@ -7,16 +7,15 @@ from config import config
 
 
 class Policy_Network(nn.Module):
-	def __init__(self, name, state_dim, action_dim):
+	def __init__(self, name, state_dim, action_dim, init_w=3e-3):
 		super(Policy_Network, self).__init__()
 		self.name = name
-		# Architecture same as DDPG paper (low dimensional feature version)
-		self.fc1 = nn.Linear(state_dim, 400)
-		self.fc2 = nn.Linear(400, 300)
-		self.fc3 = nn.Linear(300, action_dim)
+		self.fc1 = nn.Linear(state_dim, 128)
+		self.fc2 = nn.Linear(128, 64)
+		self.fc3 = nn.Linear(64, action_dim)
 		# initialize weights and biases of last layer as in DDPG paper
-		nn.init.uniform_(self.fc3.weight, -3e-3, 3e-3)
-		nn.init.uniform_(self.fc3.bias, -3e-3, 3e-3)
+		nn.init.uniform_(self.fc3.weight, -init_w, init_w)
+		nn.init.uniform_(self.fc3.bias, -init_w, init_w)
 	
 	def forward(self, state):
 		"""
@@ -56,7 +55,7 @@ class Actor(object):
 		# add optimizer
 		self.optimizer = optim.Adam(self.mu.parameters(), lr=config.actor_lr)
 	
-	def _soft_target_update(self, eval_net=None, target_net=None):
+	def soft_target_update(self, eval_net=None, target_net=None):
 		if eval_net is None:
 			eval_net = self.mu
 		if target_net is None:
@@ -92,8 +91,6 @@ class Actor(object):
 		self.optimizer.zero_grad()
 		loss.backward()
 		self.optimizer.step()
-		# move target network toward eval network
-		self._soft_target_update()
 		return loss.item() # -Q(s, mu(s))
 	
 	def choose_action(self, s):

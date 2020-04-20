@@ -52,46 +52,6 @@ class DDPG(object):
 		torch.save(self.actor.mu.state_dict(), config.model_output + "actor")
 		torch.save(self.critic.q.state_dict(), config.model_output + "critic")
 	
-	def learn_step(self, t, replay_buffer):
-		"""
-		Performs an update of parameters by sampling from replay_buffer
-
-		Args:
-			t: number of iteration (episode and move)
-			replay_buffer: ReplayBuffer instance .sample() gives batches
-		Returns:
-			-loss, which is  Q(s_t, mu(s_t))
-		"""
-		s, a, r, sp, done = replay_buffer.sample(config.batch_size)
-		s = torch.cat(s)
-		a = torch.cat(a)
-		r = torch.cat(r)
-		sp = torch.cat(sp)
-		done = torch.cat(done)
-		# train the actor and record loss
-		q_eval = -self.actor.train_on_batch(s, self.critic.q)
-		# train the critic by bootstrapping
-		mup = self.actor.target_mu(sp).detach()
-		self.critic.train_on_batch(s, a, sp, mup, r, done)
-		return q_eval
-	
-	def train_step(self, t, replay_buffer):
-		"""
-		Perform training step
-		Args:
-			t: (int) nths step
-			replay_buffer: buffer for sampling
-		"""
-		q_eval = 0
-		# perform training step
-		if (t % config.learning_freq == 0):
-			q_eval = self.learn_step(t, replay_buffer)
-		# occasionally save the weights
-		if (t % config.saving_freq == 0):
-			self.save()
-		return q_eval
-	
-
 	def train(self):
 		"""
 		Performs training of Actor & Critic
@@ -134,10 +94,12 @@ class DDPG(object):
 				state = new_state
 				if (t > config.learning_start):
 					# perform a training step
-					q_eval = self.train_step(t, replay_buffer)
+					q_eval, mse_eval = self.train_step(t, replay_buffer)
 					# logging stuff
 					if ((t % config.log_freq == 0) and (t % config.learning_freq == 0)):
-						pass
+						sys.stdout.write("\rStep:[{}/{}]\t actor_q={:.5f}\t critic_loss={:.5f}".
+										 format(t, config.nsteps_train, q_eval, mse_eval))
+						sys.stdout.flush()
 				# t <= learning start
 				elif (t % config.log_freq == 0):
 					sys.stdout.write("\rPopulating the memory {}/{}...".
@@ -166,6 +128,41 @@ class DDPG(object):
 		self.save()
 		scores_eval += [self.evaluate()]
 		export_plot(scores_eval, "Scores", config.plot_output)
+	
+	def train_step(self, t, replay_buffer):
+		"""
+		Perform training step
+		Args:
+			t: (int) number of iteration (episode and move)
+			replay_buffer: ReplayBuffer instance .sample() gives batches
+		Returns:
+			-actor_loss, which is  Q(s_t, mu(s_t))
+			critic_loss, which is MSE(Q(s', mu'(s')) + r - Q(s, a))
+		"""
+		q_eval = mse_eval = 0
+		# perform training step
+		if (t % config.learning_freq == 0):
+			# Performs an update of parameters by sampling from replay_buffer
+			s, a, r, sp, done = replay_buffer.sample(config.batch_size)
+			s = torch.cat(s)
+			a = torch.cat(a)
+			r = torch.cat(r)
+			sp = torch.cat(sp)
+			done = torch.cat(done)
+			# train the actor and record Q
+			q_eval = -self.actor.train_on_batch(s, self.critic.q)
+			# train the critic by bootstrapping
+			mup = self.actor.target_mu(sp).detach()
+			mse_eval = self.critic.train_on_batch(s, a, sp, mup, r, done)
+			# move target network toward eval network
+			self.actor.soft_target_update()
+			self.critic.soft_target_update()
+			
+		# occasionally save the weights
+		if (t % config.saving_freq == 0):
+			self.save()
+			
+		return q_eval, mse_eval
 	
 	def evaluate(self, env=None, num_episodes=None):
 		"""
